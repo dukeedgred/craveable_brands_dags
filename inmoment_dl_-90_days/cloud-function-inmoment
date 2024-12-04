@@ -1,0 +1,108 @@
+import os
+import json
+import requests
+import logging
+import uuid
+import pytz
+import functions_framework
+from datetime import datetime, timedelta, timezone
+
+from google.cloud import bigquery
+from google.cloud import secretmanager
+
+bigquery_client = bigquery.Client()
+secret_client = secretmanager.SecretManagerServiceClient()
+
+token = "";
+lastsurvey = datetime(2021, 6, 1, 0, 0, 0, 0, pytz.UTC);
+
+def get_last_survey_datetime():
+    results = bigquery_client.query("SELECT MAX(SYS_SOURCE_TIMESTAMP) AS SYS_SOURCE_TIMESTAMP FROM dev01-insights.LND.LND_INMOMENT_SURVEY_RESPONSE").result();
+    for row in results:
+        if row.SYS_SOURCE_TIMESTAMP is None:
+            return datetime(2021, 6, 1, 0, 0, 0, 0, pytz.UTC);
+        else:
+            return row.SYS_SOURCE_TIMESTAMP;
+
+def get_survey_ids(fromdt, todt):
+    global token;
+    headers = {
+        "Authorization": "OAuth " + token
+    }
+    response = requests.get("https://api.inmoment.com.au/api/rest/1.1/etl/surveyresponses/ids/" + fromdt.strftime('%Y-%m-%dT%H:%M:%S') + "/" + todt.strftime('%Y-%m-%dT%H:%M:%S') + "/45", headers=headers);
+    surveyids = response.json();
+    return surveyids;
+
+def get_survey(survey_ids):
+    global token;
+    headers = {
+        "Authorization": "OAuth " + token
+    }
+    response = requests.post("https://api.inmoment.com.au/api/rest/1.1/etl/surveyresponses/batch/true", headers=headers, json=survey_ids);
+    surveydetails = response.json();
+    return surveydetails;
+
+def get_currenttoken():
+    global token;
+    name = f"projects/prod-insights/secrets/INMOMENT_TOKEN/versions/latest"
+    response = secret_client.access_secret_version(name=name)
+    token = response.payload.data.decode("UTF-8");
+    #print(f"token: {token}")
+
+
+def get_token():
+    global token;
+    name = f"projects/prod-insights/secrets/INMOMENT_API_CONFIG/versions/latest"
+    response = secret_client.access_secret_version(name=name)
+    cnofig_data = response.payload.data.decode("UTF-8");
+
+    response = requests.post("https://api.inmoment.com.au/api/oauth/authorize", data=cnofig_data);
+    response_token = response.json();
+    print(cnofig_data);
+    print(response_token);
+    token = response_token["access_token"];
+
+def split(list_a, chunk_size):
+  for i in range(0, len(list_a), chunk_size):
+    yield list_a[i:i + chunk_size]
+
+def get_survey_resposes():
+    get_currenttoken();
+    i = 0;
+    todt = datetime(2021, 6, 1, 0, 0, 0, 0, pytz.UTC);
+    fromdt = get_last_survey_datetime() + timedelta(days=-14);
+    fromdt = fromdt.replace(tzinfo=pytz.UTC)
+    #print(fromdt)
+
+    while todt < datetime.now(timezone.utc):
+        #datetime.now - fromdt < 7 ? timedelta(days=datetime.now) - fromdt : 7
+        #fromdt = todt;
+        todt = fromdt + timedelta(days=7);
+        todt = todt.replace(tzinfo=pytz.UTC)
+        print(fromdt);
+        print(todt);
+        i = i + 1;
+
+        all_survey_ids = get_survey_ids(fromdt, todt);
+        print(f"total surveys: {len(all_survey_ids)}");
+        chunk_survey_ids = list(split(all_survey_ids, 100));
+        inserted = 0;
+        for survey_ids in chunk_survey_ids:
+            survey_responses = get_survey(survey_ids);
+            rows_to_insert = [];
+            for survey in survey_responses:
+                rows_to_insert.append({"ID": str(survey["id"]),"PAYLOAD":json.dumps(survey), "SYS_SOURCE_TIMESTAMP":survey["lastModTime"], "SYS_INSERT_EXECUTION_ID": str(uuid.uuid4()), "SYS_INSERT_DATETIME":datetime.now().strftime('%Y-%m-%d %H:%M:%S'), "SYS_SOURCE_FILENAME":"INMOMENT"});
+            errors = bigquery_client.insert_rows_json("dev01-insights.DEV_STG.LND_INMOMENT_SURVEY_RESPONSE", rows_to_insert);
+            inserted = inserted + len(rows_to_insert);
+            print(f"inserted big chunk: {inserted} of {len(all_survey_ids)}");
+        
+        fromdt = todt;
+
+@functions_framework.http
+def start_inmoment_process(request):
+
+    process_name = request.form.get('process_name')
+
+    if process_name == "survey":
+        get_survey_resposes();
+        return "done";
