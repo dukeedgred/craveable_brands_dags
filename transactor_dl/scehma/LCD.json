@@ -1,0 +1,37 @@
+[
+    {
+      "mode": "NULLABLE", 
+      "name": "Customer_ID", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Card_Number", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Card_Status", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Start_Date", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "End_date", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Card_Type_ID", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Card_Type_Name", 
+      "type": "STRING"
+    }
+  ]

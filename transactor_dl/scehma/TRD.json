@@ -1,0 +1,37 @@
+[
+    {
+      "mode": "NULLABLE", 
+      "name": "Transaction_ID", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Detail_ID", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Quantity", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Price", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "SKU", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Product_ID", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Product_Name", 
+      "type": "STRING"
+    }
+  ]

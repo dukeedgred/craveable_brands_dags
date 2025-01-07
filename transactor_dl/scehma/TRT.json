@@ -1,0 +1,27 @@
+[
+    {
+      "mode": "NULLABLE", 
+      "name": "VOUCHER_TENDER_CODE", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "VOUCHER_CODE", 
+      "type": "STRING"
+    },
+    {
+      "mode": "NULLABLE", 
+      "name": "CUSTOMER_CODE", 
+      "type": "STRING"
+    },
+    {
+      "mode": "NULLABLE", 
+      "name": "TENDER_END_DATE", 
+      "type": "STRING"
+    },
+    {
+      "mode": "NULLABLE", 
+      "name": "TRANSACTION_CODE", 
+      "type": "STRING"
+    }
+]

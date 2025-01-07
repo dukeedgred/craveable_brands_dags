@@ -1,0 +1,57 @@
+[
+    {
+      "mode": "NULLABLE", 
+      "name": "ID", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "MCA_ID", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Customer_ID", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "MCA_Component_ID", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Event_Type_ID", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Event_Type_Name", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Event_Date", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Process_Date", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "External_Ref_ID", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Channel_ID", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Channel_Name", 
+      "type": "STRING"
+    }
+  ]

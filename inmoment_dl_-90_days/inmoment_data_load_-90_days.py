@@ -65,6 +65,8 @@ def call_cloud_function():
     idt = id_token.fetch_id_token(request, "https://us-central1-dev01-insights.cloudfunctions.net/dev-inmoment-survey-90-days")
     headers = { 'Authorization' : "Bearer " + idt }
 
+    logging.info(headers)
+
     #connection to cloud function killed when runtime > 5-10 minutes
     #below code prevents connection from closing automatically
     # SO_KEEPALIVE: 1 => Enable TCP keepalive
@@ -78,7 +80,11 @@ def call_cloud_function():
         (socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 60),
     ]
     
-    response = requests.post("https://us-central1-dev01-insights.cloudfunctions.net/dev-inmoment-survey-90-days",data={'process_name': 'survey'},headers=headers)
+    response = requests.post(
+        "https://us-central1-dev01-insights.cloudfunctions.net/dev-inmoment-survey-90-days", 
+        data={'process_name': 'survey'},
+        headers=headers
+    )
     return response.text
 
 # DAG / Task / Group Definitions

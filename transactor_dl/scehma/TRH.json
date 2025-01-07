@@ -1,0 +1,107 @@
+[
+    {
+      "mode": "NULLABLE", 
+      "name": "Transaction_Date", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Processed_Date", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Transaction_ID", 
+      "type": "INTEGER"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Transaction_Type_ID", 
+      "type": "INTEGER"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Transaction_Type_Name", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Customer_ID", 
+      "type": "INTEGER"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Merchant_ID", 
+      "type": "INTEGER"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Card_Number", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Purchase_Value", 
+      "type": "FLOAT"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Loyalty_Value", 
+      "type": "FLOAT"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Credit_Value", 
+      "type": "INTEGER"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "RefundTransaction_ID", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Internal_AEC_ID", 
+      "type": "INTEGER"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "MCA_Component_ID", 
+      "type": "INTEGER"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Parent_Transaction_ID", 
+      "type": "INTEGER"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Custom_1", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "Ext_Transaction_ID", 
+      "type": "STRING"
+    }, 
+    {
+      "mode": "NULLABLE", 
+      "name": "GUID", 
+      "type": "STRING"
+    },
+    {
+  "mode": "NULLABLE",
+  "name": "OHEICS_ID",
+  "type": "STRING"
+    },
+    {
+  "mode": "NULLABLE",
+  "name": "LOYALTY_IDENT_TYPE",
+  "type": "STRING"
+    },
+    {
+  "mode": "NULLABLE",
+  "name": "SERVICE_TYPE",
+  "type": "STRING"
+    }
+]
