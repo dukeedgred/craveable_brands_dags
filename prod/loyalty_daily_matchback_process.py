@@ -7,32 +7,36 @@ from airflow.operators.http_operator import SimpleHttpOperator
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.google.cloud.hooks.bigquery import  BigQueryHook
 from airflow.hooks.http_hook import HttpHook
-#import datetime
 from google.cloud import bigquery
 from datetime import datetime, timedelta
 from google.oauth2 import id_token
 import google.auth.transport.requests
-import traceback
 import json
+import requests
+import traceback
+import logging
 
+# Variable Definitions
 local_tz = pendulum.timezone("Australia/Sydney")
+#yesterday = datetime.today() - timedelta(days=1) #always export the day before
+export_date = local_tz.convert(datetime.today()) #localize the date
 
 BQ_CONN_ID = models.Variable.get ('bq_connection')
 BQ_PROJECT = models.Variable.get ('gcp_project')
+BQ_PROJECT_ECOMM = models.Variable.get ('gcp_project_ecomm')
 dag_owner = models.Variable.get ('dag_owner')
-source_system_code = "MENULOG"
-dlf_batch_name = ""
+source_system_code = "LOYALTY"
+dlf_batch_name = source_system_code + "_DATA_LOAD_BATCH"
 
-# UPDATE BELOW LINE FOR NEW CODE
-report_types = models.Variable.get ('menulog_report_types', deserialize_json=True)
+brand_list = ["op","rr"]
+find_unenriched_proc = "ECOMM_XX_APPS_DELIVERECT.usp_find_unenriched_transactid"
+update_unenriched_proc = "ECOMM_XX_APPS_DELIVERECT.usp_update_unenriched_transactid"
 
-# DEFINING THE TASK PREFIX FOR THE DAG TASK
-task_group_prefix = "LND_STG_HSTG_"
+logger = logging.getLogger(__name__)
 
-lnd_prefix = "LND.LOAD_LND_" + source_system_code + "_"
-stg_prefix = "STG.LOAD_STG_" + source_system_code + "_"
-hstg_prefix = "HSTG.LOAD_HSTG_" + source_system_code + "_"
+#================= begin declarations ================================================
 
+# Calling CF in GCP
 class GCPCloudFunctionOperator(SimpleHttpOperator):
     def execute(self, context):
         http = HttpHook(self.method, http_conn_id=self.http_conn_id)
@@ -41,7 +45,8 @@ class GCPCloudFunctionOperator(SimpleHttpOperator):
         target_audience = hostname 
         request = google.auth.transport.requests.Request()
         idt = id_token.fetch_id_token(request, target_audience)
-        self.headers = { 'Authorization' : "Bearer " + idt }
+        self.headers = { 'Authorization' : 'Bearer ' + idt, 'Content-Type': 'application/json' }
+        
         response = http.run(self.endpoint,
                             self.data,
                             self.headers,
@@ -59,10 +64,8 @@ def dlf_pre_execute (system_code, package_type, package_name, ti):
     else:
         batch_execution_id = None
 
-    # hook = BigQueryHook(bigquery_conn_id=BQ_CONN_ID, use_legacy_sql=False) # P.D. Removed 2023-09-05
-    hook = BigQueryHook(gcp_conn_id=BQ_CONN_ID, use_legacy_sql=False)
-    # bq_client = bigquery.Client(project = hook._get_field("project"), credentials = hook._get_credentials()) # P.D. Removed 2023-09-05
-    bq_client = hook.get_client(project_id = hook._get_field("project"))
+    hook = BigQueryHook(gcp_conn_id =BQ_CONN_ID, use_legacy_sql=False)
+    bq_client = hook.get_client(project_id=hook._get_field("project"))
     query = """
     DECLARE v_EXECUTION_ID, v_BATCH_EXECUTION_ID, v_SYSTEM_CODE, v_PACKAGE_NAME, v_PACKAGE_TYPE, v_RETURN_MESSAGE STRING;
     SET v_SYSTEM_CODE = '{0}';
@@ -77,10 +80,27 @@ def dlf_pre_execute (system_code, package_type, package_name, ti):
     for result in job.result():
         execution_id = result.EXECUTION_ID
         ti.xcom_push(key=package_name, value=execution_id)
-        # print (execution_id)
     
     return execution_id
-    
+
+# expects the project & stored_procedure name which is (dataset + proc name)
+def dlf_execute_stored_procedure (bq_project, stored_procedure, ti):
+    hook = BigQueryHook(gcp_conn_id =BQ_CONN_ID, use_legacy_sql=False)
+    bq_client = hook.get_client(project_id=hook._get_field("project"))
+    query = """
+    DECLARE v_RETURN_MESSAGE STRING;
+    CALL `{0}.{1}` (v_RETURN_MESSAGE);
+    SELECT v_RETURN_MESSAGE AS RETURN_MESSAGE;   
+    """.format(
+            bq_project,
+            stored_procedure
+        )
+    job = bq_client.query(query)
+
+    for result in job.result():
+        retmsg = result.RETURN_MESSAGE
+        print (retmsg)   
+
 def dlf_on_failure_logging (context):	    
     task = context.get('task_instance').task_id
     ti = context.get('task_instance')
@@ -89,33 +109,12 @@ def dlf_on_failure_logging (context):
     exception = context.get('exception')
     formatted_exception = ''.join(traceback.format_exception(etype=type(exception), value=exception, tb=exception.__traceback__)).strip()
 
-    #dlf_post_execute (package_name, "FAILURE", formatted_exception, ti)
-
-def dlf_execute_stored_procedure (stored_procedure, ti):
-    # hook = BigQueryHook(bigquery_conn_id=BQ_CONN_ID, use_legacy_sql=False) # P.D. Removed 2023-09-05
-    hook = BigQueryHook(gcp_conn_id=BQ_CONN_ID, use_legacy_sql=False)
-    # bq_client = bigquery.Client(project = hook._get_field("project"), credentials = hook._get_credentials()) # P.D. Removed 2023-09-05
-    bq_client = hook.get_client(project_id = hook._get_field("project"))
-    query = """
-    DECLARE v_RETURN_MESSAGE STRING;
-    CALL `{0}.{1}` (v_RETURN_MESSAGE);
-    SELECT v_RETURN_MESSAGE AS RETURN_MESSAGE;   
-    """.format(
-            BQ_PROJECT,
-            stored_procedure
-        )
-    job = bq_client.query(query)
-
-    for result in job.result():
-        retmsg = result.RETURN_MESSAGE
-        print (retmsg)
+    dlf_post_execute (package_name, "FAILURE", formatted_exception, ti)
 
 def dlf_post_execute (package_name, execution_status, error_message, ti):
     execution_id = ti.xcom_pull(key=package_name)
-    # hook = BigQueryHook(bigquery_conn_id=BQ_CONN_ID, use_legacy_sql=False) # P.D. Removed 2023-09-05
-    hook = BigQueryHook(gcp_conn_id=BQ_CONN_ID, use_legacy_sql=False)
-    # bq_client = bigquery.Client(project = hook._get_field("project"), credentials = hook._get_credentials()) # P.D. Removed 2023-09-05
-    bq_client = hook.get_client(project_id = hook._get_field("project"))
+    hook = BigQueryHook(gcp_conn_id =BQ_CONN_ID, use_legacy_sql=False)
+    bq_client = hook.get_client(project_id=hook._get_field("project"))
     query = """
     CALL `{3}.CFG.POST_EXECUTION`('{0}', '{1}', '{2}');
     """.format(
@@ -124,28 +123,30 @@ def dlf_post_execute (package_name, execution_status, error_message, ti):
             error_message,
             BQ_PROJECT
         )    
-    bq_client.query(query)
+    bq_client.query(query)    
+
+#================= end declarations ===================================================
 
 # DAG / Task / Group Definitions
 default_dag_args = {
     "owner": dag_owner,
-    'start_date': datetime(2022, 11, 7, 6, tzinfo=local_tz),
+    'start_date': datetime(2024, 2, 27, 15, tzinfo=local_tz),
     'email_on_failure': True,
     'email_on_retry': False,
-    "emails": ['dhaval.faria@one51.com.au'],
+    "emails": ['eddie.chong@craveablebrands.com.au'],
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
     "depends_on_past": False
 }
 
-with DAG ("menulog_data_load",
-    schedule_interval = "0 9 * * *",
+with DAG ("loyalty_daily_matchback_process",
+    schedule_interval = "0 7 * * *",
     default_args = default_dag_args,
     catchup=False,
-    dagrun_timeout=timedelta(minutes=60)
+    dagrun_timeout=timedelta(minutes=90)
     ) as dag:
 
-    data_load_batch_start = PythonOperator (
+    processing_batch_start = PythonOperator (
         task_id = "batch_start",
         python_callable = dlf_pre_execute,
         op_kwargs = {
@@ -156,9 +157,7 @@ with DAG ("menulog_data_load",
         provide_context=True
     )
 
-    data_load_package = source_system_code + '_DATA_LOAD'
-
-    data_load_batch_end = PythonOperator (
+    processing_batch_end = PythonOperator (
         task_id = "batch_end",
         python_callable = dlf_post_execute,
         op_kwargs = {
@@ -170,7 +169,7 @@ with DAG ("menulog_data_load",
         provide_context=True
     )
 
-    data_load_batch_error = PythonOperator (
+    processing_batch_error = PythonOperator (
         task_id = "batch_error",
         python_callable = dlf_post_execute,
         op_kwargs = {
@@ -182,18 +181,15 @@ with DAG ("menulog_data_load",
         provide_context=True
     )
 
-    with TaskGroup(group_id=data_load_package) as data_load_process:
+    with TaskGroup(group_id="matchback_processing") as matchback_processing:
 
-        # Dynamically create tasks according to the table array
-        for report_type in report_types:
-            task_group = task_group_prefix + report_type
-            lnd_table = lnd_prefix + report_type
-            stg_table = stg_prefix + report_type
-            hstg_table = hstg_prefix + report_type
+        for brand in brand_list:
+
+            task_group = f"PROCESSING_BRAND_{brand.upper()}"
 
             with TaskGroup (group_id=task_group) as STG_HSTG:
 
-                data_load_module_start = PythonOperator (
+                processing_module_start = PythonOperator (
                     task_id = "module_start",
                     python_callable = dlf_pre_execute,
                     op_kwargs = {
@@ -204,45 +200,7 @@ with DAG ("menulog_data_load",
                     provide_context=True
                 )
 
-                data_load_lnd_raw = GCPCloudFunctionOperator (
-                    task_id = "LND_RAW_" + report_type,
-                    method = "POST",
-                    http_conn_id = "menulog_data",
-                    data={"report_type": report_type},
-                    endpoint='/',
-                    headers={},
-                    response_check=lambda response: True if response.status_code == 200 is True else False,
-                    on_failure_callback=dlf_on_failure_logging
-                )
-            
-                data_load_lnd = PythonOperator (
-                    task_id = lnd_table,
-                    python_callable = dlf_execute_stored_procedure,
-                    op_kwargs = {
-                        'stored_procedure' : lnd_table
-                    },
-                    on_failure_callback=dlf_on_failure_logging
-                )
-            
-                data_load_stg = PythonOperator (
-                    task_id = stg_table,
-                    python_callable = dlf_execute_stored_procedure,
-                    op_kwargs = {
-                        'stored_procedure' : stg_table
-                    },
-                    on_failure_callback=dlf_on_failure_logging
-                )
-
-                data_load_hstg = PythonOperator (
-                    task_id = hstg_table,
-                    python_callable = dlf_execute_stored_procedure,
-                    op_kwargs = {
-                        'stored_procedure' : hstg_table
-                    },
-                    on_failure_callback=dlf_on_failure_logging
-                )
-
-                data_load_module_end = PythonOperator (
+                processing_module_end = PythonOperator (
                     task_id = "module_end",
                     python_callable = dlf_post_execute,
                     op_kwargs = {
@@ -252,9 +210,54 @@ with DAG ("menulog_data_load",
                     },
                     # trigger_rule='all_success',
                     provide_context=True
+                )
+
+                find_unenriched = PythonOperator (
+                    task_id = f"FIND_UNENRICHED_{brand.upper()}_SP",
+                    python_callable = dlf_execute_stored_procedure,
+                    op_kwargs = {
+                        'bq_project' : BQ_PROJECT_ECOMM,
+                        'stored_procedure' : find_unenriched_proc.replace("XX", brand.upper())
+                    },
+                    on_failure_callback=dlf_on_failure_logging
+                )        
+
+                # https://prod-dw-etl-ecom-enrich-transactorid-nowvpwp6oq-uc.a.run.app
+                enrich_transactorid = GCPCloudFunctionOperator(
+                    task_id = f"UNENRICHED_TRANSACTORID_{brand.upper()}_CF",
+                    method='POST',
+                    http_conn_id='gcp_cf_dw_etl_loyalty_enrich_transactid',
+                    data=json.dumps({'brand': brand}),
+                    endpoint='/',
+                    headers={},
+                    response_check=lambda response: True if response.status_code == 200 is True else False,
+                    on_failure_callback=dlf_on_failure_logging
+                )
+
+                update_unenriched = PythonOperator (
+                    task_id = f"UPDATE_UNENRICHED_{brand.upper()}_SP",
+                    python_callable = dlf_execute_stored_procedure,
+                    op_kwargs = {
+                        'bq_project' : BQ_PROJECT_ECOMM,
+                        'stored_procedure' : update_unenriched_proc.replace("XX", brand.upper())
+                    },
+                    on_failure_callback=dlf_on_failure_logging
+                )
+
+                # https://prod-dw-etl-ecom-export-matchback-to-sftp-nowvpwp6oq-uc.a.run.app
+                export_sftp = GCPCloudFunctionOperator(
+                    task_id = f"EXPORT_MATCHBACK_{brand.upper()}_CF",
+                    method='POST',
+                    http_conn_id='gcp_cf_dw_etl_loyalty_export_sftp',
+                    data=json.dumps({'brand': brand, 'export_date': str(export_date.date()) }) , 
+                    endpoint='/',
+                    headers={},
+                    response_check=lambda response: True if response.status_code == 200 is True else False,
+                    on_failure_callback=dlf_on_failure_logging
                 )            
 
-                data_load_module_start >> data_load_lnd_raw >> data_load_lnd >> data_load_stg >> data_load_hstg >> data_load_module_end
+                processing_module_start >> find_unenriched >> enrich_transactorid >> update_unenriched >> export_sftp >> processing_module_end
 
-#data_load_batch_start >> data_load_process >> data_load_batch_end >> data_load_process >> data_load_batch_error
-data_load_batch_start >> data_load_process >> data_load_batch_end >> data_load_batch_error
+
+processing_batch_start >> matchback_processing >> processing_batch_end
+matchback_processing >> processing_batch_error
