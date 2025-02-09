@@ -3,7 +3,7 @@ from airflow import DAG
 from airflow import models
 from airflow.utils.task_group import TaskGroup
 from airflow.operators.dummy_operator import DummyOperator
-from airflow.operators.http_operator import SimpleHttpOperator
+from airflow.providers.http.operators.http import HttpOperator
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.google.cloud.hooks.bigquery import  BigQueryHook
 from airflow.hooks.http_hook import HttpHook
@@ -36,7 +36,7 @@ stg_prefix = "STG.LOAD_STG_" + source_system_code + "_"
 hstg_prefix = "HSTG.LOAD_HSTG_" + source_system_code + "_"
 
 # Data Ingestion
-class GCPCloudFunctionOperator(SimpleHttpOperator):
+class GCPCloudFunctionOperator(HttpOperator):
     def execute(self, context):
         http = HttpHook(self.method, http_conn_id=self.http_conn_id)
         hostname = http.get_connection(self.http_conn_id).host
@@ -44,12 +44,9 @@ class GCPCloudFunctionOperator(SimpleHttpOperator):
         target_audience = hostname 
         request = google.auth.transport.requests.Request()
         idt = id_token.fetch_id_token(request, target_audience)
-        self.headers = { 'Authorization' : "Bearer " + idt }
+        self.headers = {'Authorization': "Bearer " + idt}
 
-        response = http.run(self.endpoint,
-                            self.data,
-                            self.headers,
-                            self.extra_options)
+        response = http.run(self.endpoint, self.data, self.headers, self.extra_options)
         self.log.info(response)
         self.log.info(response.text)
         
@@ -60,12 +57,9 @@ class GCPCloudFunctionOperator(SimpleHttpOperator):
                     self.data['retry'] = response.text
                     request = google.auth.transport.requests.Request()
                     idt = id_token.fetch_id_token(request, target_audience)
-                    self.headers = { 'Authorization' : "Bearer " + idt }
+                    self.headers = {'Authorization': "Bearer " + idt}
 
-                    response = http.run(self.endpoint,
-                                        self.data,
-                                        self.headers,
-                                        self.extra_options)
+                    response = http.run(self.endpoint, self.data, self.headers, self.extra_options)
                     self.log.info(response)
                     self.log.info(response.text)
 
