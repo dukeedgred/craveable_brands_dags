@@ -3,7 +3,7 @@ from airflow import DAG
 from airflow import models
 from airflow.utils.task_group import TaskGroup
 from airflow.operators.dummy_operator import DummyOperator
-from airflow.operators.http_operator import SimpleHttpOperator
+from airflow.providers.http.operators.http import HttpOperator
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.google.cloud.hooks.bigquery import  BigQueryHook
 from airflow.hooks.http_hook import HttpHook
@@ -35,25 +35,25 @@ days_to_extract = models.Variable.get('uber_eats_days_to_extract')
 
 # Python Function Definitions
 # Data Ingestion
-class GCPCloudFunctionOperator(SimpleHttpOperator):
+class GCPCloudFunctionOperator(HttpOperator):
     def execute(self, context):
         http = HttpHook(self.method, http_conn_id=self.http_conn_id)
         hostname = http.get_connection(self.http_conn_id).host
         self.log.info(f'Calling HTTP method: {hostname}.')
-        target_audience = hostname 
+        target_audience = hostname
         request = google.auth.transport.requests.Request()
         idt = id_token.fetch_id_token(request, target_audience)
-        self.headers = { 'Authorization' : "Bearer " + idt }
-        response = http.run(self.endpoint,
-                            self.data,
-                            self.headers,
-                            self.extra_options)
+        self.headers = { 'Authorization': f"Bearer {idt}" }
+        response = http.run(
+            self.endpoint,
+            self.data,
+            self.headers,
+            self.extra_options
+        )
+
         self.log.info(response)
 
-        if response.status_code == 200:
-            return True
-        else:
-            return False
+        return response.status_code == 200
 
 def dlf_pre_execute (system_code, package_type, package_name, ti):
     if (package_type=="MODULE"):

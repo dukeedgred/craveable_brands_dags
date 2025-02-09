@@ -3,7 +3,6 @@ from airflow import DAG
 from airflow import models
 from airflow.utils.task_group import TaskGroup
 from airflow.operators.dummy_operator import DummyOperator
-from airflow.operators.http_operator import SimpleHttpOperator
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.google.cloud.hooks.bigquery import  BigQueryHook
 from airflow.hooks.http_hook import HttpHook
